@@ -1,0 +1,11 @@
+.vscode/
+.clangd
+
+build/
+
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+sdkconfig.bak
+
+.DS_Store
