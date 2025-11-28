@@ -8,7 +8,7 @@
 static const char *TAG = "mr24hpc";
 
 // UART configuration
-#define UART_NUM            UART_NUM_2   // koristim UART2
+#define UART_NUM            UART_NUM_2   // using UART2
 #define UART_RX_PIN         16           // ESP32 RX <-- MR24 TX
 #define UART_TX_PIN         17           // ESP32 TX --> MR24 RX
 #define UART_BUF_SIZE       1024
@@ -66,7 +66,7 @@ static void mr24_task(void *arg) {
     int frame_pos = 0;
     bool in_frame = false;
     while (1) {
-        int len = uart_read_bytes(UART_NUM, buf, sizeof(buf), pdMS_TO_TICKS(200)); //200ms čeka (timeout), nakon 200ms vraća 0
+        int len = uart_read_bytes(UART_NUM, buf, sizeof(buf), pdMS_TO_TICKS(200)); // 200ms wait (timeout), returns 0 after 200ms
         if (len <= 0) {
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
@@ -74,7 +74,7 @@ static void mr24_task(void *arg) {
         for (int i = 0; i < len; ++i) {
             uint8_t b = buf[i];
             if (!in_frame) {
-                // tražim header 0x53 0x59
+                // looking for header 0x53 0x59
                 if (frame_pos == 0 && b == FRAME_HDR0) {
                     frame[frame_pos++] = b;
                 } else if (frame_pos == 1) {
@@ -90,28 +90,28 @@ static void mr24_task(void *arg) {
                     if (b == FRAME_HDR0) frame_pos = 1;
                 }
             } else {
-                // akumiliramo dok ne vidimo tail 0x54 0x43;
+                // accumulate until we see tail 0x54 0x43;
                 frame[frame_pos++] = b;
                 // minimal frame length check (hdr(2)+ctrl(1)+cmd(1)+len(2)+checksum(1)+tail(2) => 9)
                 if (frame_pos >= 9) {
-                    // duljina podataka (u bajtovima) je na poziciji 4(length_H) i 5(length_L)
-                    uint16_t data_len = ((uint16_t)frame[4] << 8) | frame[5]; //operacije nad bitovima, zato sto frame sprema 8-bitne blokove
+                    // data length (in bytes) is at position 4(length_H) and 5(length_L)
+                    uint16_t data_len = ((uint16_t)frame[4] << 8) | frame[5]; // bitwise operations, because frame stores 8-bit blocks
                     int expected_len = 2 /*hdr*/ + 1 /*ctrl*/ + 1 /*cmd*/ + 2 /*len*/ + data_len + 1 /*chksum*/ + 2 /*tail*/;
                     if (frame_pos == expected_len) {
-                        // verificiraj tail
+                        // verify tail
                         if (frame[frame_pos-2] == FRAME_TAIL0 && frame[frame_pos-1] == FRAME_TAIL1) {
-                            // verificiraj checksum:
-                            // prema dokumentaciji ==> checksum = sum(frame header + control + command + length + data) lower 8 bits
+                            // verify checksum:
+                            // according to documentation ==> checksum = sum(frame header + control + command + length + data) lower 8 bits
                             uint8_t expected_chksum = frame[frame_pos - 3];
                             uint8_t calc = calc_checksum(frame, 2 + 1 + 1 + 2 + data_len);
                             if (calc == expected_chksum) {
-                                // dobar frame — procesiraj
+                                // good frame — process it
                                 uint8_t control = frame[2];
                                 uint8_t command = frame[3];
                                 uint8_t *data = &frame[6]; // data starts at index 6
                                 ESP_LOGI(TAG, "Got frame: ctrl=0x%02X cmd=0x%02X data_len=%u\n", control, command, data_len);
                                 
-                                // poziv za debugiranje - ispiši podatke
+                                // debug call - print data
                                 dump_hex(data, data_len);
                                 
                                 if (control == 0x01 && command == 0x01) {
@@ -125,7 +125,7 @@ static void mr24_task(void *arg) {
                         } else {
                             ESP_LOGW(TAG, "Invalid tail bytes.");
                         }
-                        // reset za iduci frame
+                        // reset for the next frame
                         frame_pos = 0;
                         in_frame = false;
                     } else if (frame_pos > expected_len) {
